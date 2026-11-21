@@ -4,9 +4,10 @@ Jogo de tabuleiro de negócios para Android, no estilo dos clássicos de compra 
 com cidades de Mato Grosso e do Brasil. Jogue com até 6 amigos via **Bluetooth** ou passando o celular.
 
 ## Como baixar o APK
-1. Abra a aba **Actions** do repositório.
-2. Entre na execução mais recente de **Gerar APK**.
-3. Baixe o arquivo **Magnata-apk** (vem em .zip), extraia e instale o `app-debug.apk` no celular.
+Link direto (sempre a versão mais nova):
+**https://github.com/Netero-mac/Imo/releases/latest/download/Magnata.apk**
+
+Ou abra a aba **Releases** do repositório e baixe o `Magnata.apk`.
 
 Todos os jogadores precisam instalar o mesmo APK.
 

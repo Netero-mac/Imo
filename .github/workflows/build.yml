@@ -5,6 +5,9 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -28,3 +31,17 @@ jobs:
         with:
           name: Magnata-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Renomear APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk Magnata.apk
+
+      - name: Publicar na Release (link direto)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: Magnata v1.0.${{ github.run_number }}
+          body: |
+            Baixe o **Magnata.apk** abaixo e instale no celular.
+            Todos os jogadores precisam instalar a mesma versão.
+          files: Magnata.apk
+          make_latest: true
