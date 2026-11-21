@@ -29,16 +29,35 @@ Algumas redes públicas (faculdade, shopping) bloqueiam a conexão entre aparelh
 
 Se o celular do anfitrião não aparecer na lista, pareie os aparelhos antes nas configurações de Bluetooth.
 
-## Regras
-- Começa com R$ 1.500; passar pela Partida dá R$ 200.
-- Compre propriedades sem dono; quem cair nelas paga aluguel.
-- Com todas as cidades de uma cor: aluguel em dobro e pode construir casas (até 4) e hotel.
-- Dupla = joga de novo; três duplas = prisão. Na prisão: dupla, fiança de R$ 50 ou carta.
-- Cartas de **Destino** e **Surpresa**. Hipoteca e venda de casas para pagar dívidas.
-- Vence o último que não falir.
+## Visual
+- Tabuleiro em **2.5D** (isométrico): arraste com o dedo, pinça para zoom, toque duplo para aproximar.
+- Dados 3D rolando, peão andando casa por casa, casinhas e hotéis em relevo, bandeirinha do dono.
+- Cada jogador escolhe **cor**, **peão** (Peão, Carro, Cartola, Foguete, Coroa, Estrela, Barco, Diamante) e **personagem**.
+- Sons, vibração na sua vez e emojis para provocar os amigos.
+
+## Guia rápido das mecânicas
+| Mecânica | Resumo |
+|---|---|
+| 🎲 Básico | Role, ande, compre propriedades sem dono, pague aluguel nas dos outros. Passar pela Partida dá R$ 200. |
+| 🏠 Construções | Com a cor completa o aluguel dobra e dá para construir até 4 casas e um hotel. |
+| 🔒 Prisão | Tire dupla, pague a fiança ou use a carta. Na 3ª tentativa a fiança é cobrada. |
+| 🧑 Personagens | Fazendeiro (+50% aluguel em MT), Empreiteiro (−20% nas construções), Advogado (fiança R$ 20, meio imposto), Viajante (anda ±1 casa), Investidor (rende 5% ao passar pela Partida). |
+| 🔨 Leilão | Se ninguém comprar, a propriedade vai a leilão com lances de +10/+50/+100. 10 s sem lance encerra. |
+| 🤝 Trocas | Na sua vez, ofereça propriedades e dinheiro em troca das de outro jogador. |
+| 🏦 Empréstimo | Até R$ 1.000 do banco, devolvendo +20% em até 5 rodadas. |
+| 🃏 Cartas de poder | Escudo, Sabotagem, Teletransporte, Desconto, Turbo e Cobrança. Ganha ao passar pela Partida, na roleta e nas missões (máx. 3). |
+| 🌎 Eventos globais | Seca no agro, Feriadão, Boom imobiliário, Crise, Festa na cidade, Auxílio, Greve e Inflação mudam o jogo por algumas rodadas. |
+| 🎯 Missão secreta | Um objetivo escondido para cada um: vale R$ 300 + uma carta. |
+| 🎡 Roleta | Cair no Descanso gira uma roleta de prêmios (e castigos). |
+| ⏱️ Modo rápido | Partida de 15 ou 25 rodadas; vence o maior patrimônio. |
+
+O próprio jogo tem um **Guia** completo e mostra uma dica na primeira vez que cada mecânica aparece.
 
 ## Estrutura
 - `engine/` — regras do jogo (Java puro, sem Android)
 - `net/` — conexão Wi-Fi (TCP + busca automática por UDP) e Bluetooth (o celular do anfitrião é quem decide; os outros enviam ações)
-- `ui/BoardView.java` — desenho do tabuleiro
+- `engine/Rules.java` — textos e tabelas de personagens, poderes, eventos, missões e roleta
+- `ui/BoardView.java` — tabuleiro 2.5D, animações, dados e roleta
+- `ui/Pawns.java` — desenho dos peões
+- `ui/Sound.java` — efeitos sonoros (`res/raw`)
 - `MainActivity.java` — telas

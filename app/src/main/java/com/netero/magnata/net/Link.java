@@ -15,11 +15,11 @@ import java.util.concurrent.Executors;
  */
 public class Link {
     // Cliente -> Anfitrião
-    public static final byte HELLO = 1;   // dados: UTF nome
-    public static final byte ACTION = 2;  // dados: int ação, int arg
+    public static final byte HELLO = 1;   // dados: perfil do jogador + versão
+    public static final byte ACTION = 2;  // dados: int ação, int n, ints...
     // Anfitrião -> Cliente
     public static final byte WELCOME = 10; // dados: int índice do jogador
-    public static final byte LOBBY = 11;   // dados: int n, UTF nomes...
+    public static final byte LOBBY = 11;   // dados: perfis + modo de jogo
     public static final byte STATE = 12;   // dados: bytes do Game
     public static final byte ERROR = 13;   // dados: UTF mensagem
 
@@ -30,6 +30,7 @@ public class Link {
 
     public int tag = -1;
     public String name = "";
+    public com.netero.magnata.engine.Player.Setup setup;
 
     private final Closeable socket;
     private final DataInputStream in;
