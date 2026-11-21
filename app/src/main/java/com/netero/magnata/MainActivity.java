@@ -667,6 +667,11 @@ public class MainActivity extends Activity {
         prepareHost(true);
         wifiServer = new Wifi.Server();
         wifiServer.start(myProfile().name, hostServerCallback);
+        if (wifiServer.port < 0) {
+            wifiServer = null;
+            mode = MODE_NONE;
+            return;
+        }
         showHostLobby();
     }
 
@@ -702,7 +707,11 @@ public class MainActivity extends Activity {
             });
         }
         @Override public void onServerError(final String msg) {
-            ui.post(() -> { if (mode == MODE_HOST && !gameStarted) toast(msg); });
+            ui.post(() -> {
+                if (gameStarted) return;
+                new AlertDialog.Builder(MainActivity.this).setTitle("Problema na sala").setMessage(msg)
+                        .setPositiveButton("OK", null).show();
+            });
         }
     };
 
@@ -790,7 +799,10 @@ public class MainActivity extends Activity {
         if (hostWifi) {
             c.addView(label("Sala por Wi-Fi. Os amigos precisam estar na mesma rede, tocar em \"Entrar numa sala\" > Wi-Fi "
                     + "e escolher a sala de " + me.name + ".", 15));
-            TextView ipT = bold("Se não aparecer, digitem: " + String.join("  ou  ", Wifi.localIps()), 15);
+            List<String> addrs = new ArrayList<>();
+            int port = wifiServer != null ? wifiServer.port : Wifi.PORT;
+            for (String ip : Wifi.localIps()) addrs.add(port == Wifi.PORT ? ip : ip + ":" + port);
+            TextView ipT = bold("Se a sala não aparecer, digitem: " + String.join("  ou  ", addrs), 15);
             c.addView(ipT);
         } else {
             String btName = null;
@@ -959,7 +971,16 @@ public class MainActivity extends Activity {
             String a = ip.getText().toString().trim();
             if (a.isEmpty()) { toast("Digite o endereço."); return; }
             prefs.edit().putString("lastIp", a).apply();
-            connectWifi(a);
+            String host = a;
+            int[] ports = {Wifi.PORT, Wifi.PORT + 1, Wifi.PORT + 2, Wifi.PORT + 3};
+            int ci = a.lastIndexOf(':');
+            if (ci > 0) {
+                try { ports = new int[]{Integer.parseInt(a.substring(ci + 1).trim())}; host = a.substring(0, ci); }
+                catch (NumberFormatException ignored) { }
+            }
+            List<String> one = new ArrayList<>();
+            one.add(host);
+            connectWifi(one, ports);
         }));
         c.addView(button("Voltar", GREY, v -> { stopFinder(); showMenu(); }));
         setContentView(page(c));
@@ -973,10 +994,16 @@ public class MainActivity extends Activity {
             }
         } catch (Exception ignored) { }
         finder = new Wifi.Finder();
-        finder.start((name, addr) -> ui.post(() -> {
+        finder.start((name, addr, port, ips) -> ui.post(() -> {
             if (!screen.equals("joinWifi")) return;
-            for (String[] r : rooms) if (r[1].equals(addr)) { if (!r[0].equals(name)) { r[0] = name; refreshRooms(); } return; }
-            rooms.add(new String[]{name, addr});
+            String alts = String.join(",", ips);
+            for (String[] r : rooms) {
+                if (r[1].equals(addr)) {
+                    if (!r[0].equals(name) || !r[2].equals(String.valueOf(port))) { r[0] = name; r[2] = String.valueOf(port); r[3] = alts; refreshRooms(); }
+                    return;
+                }
+            }
+            rooms.add(new String[]{name, addr, String.valueOf(port), alts});
             refreshRooms();
         }));
     }
@@ -985,12 +1012,21 @@ public class MainActivity extends Activity {
         if (listBox == null || !screen.equals("joinWifi")) return;
         listBox.removeAllViews();
         if (rooms.isEmpty()) listBox.addView(label("Nenhuma sala ainda. Confira se o anfitrião criou a sala por Wi-Fi e se vocês estão na mesma rede.", 14));
-        for (final String[] r : rooms) listBox.addView(button("🎲  Sala de " + r[0] + "  (" + r[1] + ")", GREEN, v -> connectWifi(r[1])));
+        for (final String[] r : rooms) {
+            listBox.addView(button("🎲  Entrar na sala de " + r[0], GREEN, v -> {
+                List<String> ips = new ArrayList<>();
+                ips.add(r[1]);
+                for (String x : r[3].split(",")) if (!x.trim().isEmpty()) ips.add(x.trim());
+                int port = Wifi.PORT;
+                try { port = Integer.parseInt(r[2]); } catch (NumberFormatException ignored) { }
+                connectWifi(ips, new int[]{port});
+            }));
+        }
     }
 
-    private void connectWifi(String ip) {
-        if (statusText != null) statusText.setText("Conectando a " + ip + "...");
-        Wifi.connect(ip, new Bt.ConnectCallback() {
+    private void connectWifi(List<String> ips, int[] ports) {
+        if (statusText != null) statusText.setText("Conectando... (pode levar alguns segundos)");
+        Wifi.connect(ips, ports, new Bt.ConnectCallback() {
             @Override public void onConnected(final Link link) { ui.post(() -> onJoined(link)); }
             @Override public void onConnectFailed(final String msg) {
                 ui.post(() -> { if (statusText != null && screen.equals("joinWifi")) statusText.setText(msg); });
@@ -1047,9 +1083,18 @@ public class MainActivity extends Activity {
                 pushState(g);
                 break;
             }
-            case Link.ERROR:
-                toast(Msg.readStr(data));
+            case Link.ERROR: {
+                String msg = Msg.readStr(data);
+                if (!screen.equals("game")) {
+                    leaving = true;
+                    new AlertDialog.Builder(this).setTitle("Não foi possível entrar").setMessage(msg)
+                            .setCancelable(false)
+                            .setPositiveButton("OK", (d, w) -> { shutdownNetwork(); showMenu(); }).show();
+                } else {
+                    toast(msg);
+                }
                 break;
+            }
             default:
                 break;
         }
