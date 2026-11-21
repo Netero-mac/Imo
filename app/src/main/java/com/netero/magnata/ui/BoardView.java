@@ -763,34 +763,55 @@ public class BoardView extends View {
             aux.setStyle(Paint.Style.FILL);
         }
 
-        // textos pintados no chão da casa
+        // textos e ícones pintados no chão da casa (nada fica em pé nem sai da casa)
         boolean corner = p % 10 == 0;
         String name = Board.SHORT[p];
-        float centerIn = Board.TYPE[p] == Board.PROP ? -0.12f : (corner ? -0.18f : -0.2f);
-        float tcx = gx + ix * centerIn, tcy = gy + iy * centerIn;
         int ink = 0xFF3A322B;
-        if (corner) {
-            paintLabel(c, name, tcx, tcy, ex, ey, ix, iy, 0.92f, 0.17f, ink, 0);
-        } else if (Board.TYPE[p] == Board.PROP) {
+        String icon = tileIcon(p);
+        if (Board.TYPE[p] == Board.PROP) {
+            float tcx = gx - ix * 0.12f, tcy = gy - iy * 0.12f;
             boolean showPrice = game != null && game.owner[p] < 0;
             paintLabel(c, name, tcx, tcy, ex, ey, ix, iy, 0.82f, 0.15f, ink, showPrice ? 0.1f : 0);
-            if (showPrice) {
-                paintLabel(c, "R$ " + game.buyPrice(p), tcx, tcy, ex, ey, ix, iy, 0.7f, 0.12f, 0xFF2E7D32, -0.13f);
-            }
+            if (showPrice) paintLabel(c, "R$ " + game.buyPrice(p), tcx, tcy, ex, ey, ix, iy, 0.7f, 0.12f, 0xFF2E7D32, -0.13f);
+        } else if (corner) {
+            if (icon != null) paintIcon(c, icon, gx + ix * 0.13f, gy + iy * 0.13f, ex, ey, ix, iy, 0.42f);
+            paintLabel(c, name, gx - ix * 0.25f, gy - iy * 0.25f, ex, ey, ix, iy, 0.8f, 0.13f, ink, 0);
         } else {
-            paintLabel(c, name, gx - ix * 0.3f, gy - iy * 0.3f, ex, ey, ix, iy, 0.84f, 0.13f, ink, 0);
-        }
-        // ícone em pé nas casas especiais
-        String icon = tileIcon(p);
-        if (icon != null) {
-            float icx = gx + ix * (corner ? 0.15f : 0.12f), icy = gy + iy * (corner ? 0.15f : 0.12f);
-            text.setTextSize(th * (corner ? 0.95f : 0.75f));
-            c.drawText(icon, sx(icx, icy), sy(icx, icy) + th * 0.2f, text);
+            if (icon != null) paintIcon(c, icon, gx + ix * 0.14f, gy + iy * 0.14f, ex, ey, ix, iy, 0.34f);
+            paintLabel(c, name, gx - ix * 0.27f, gy - iy * 0.27f, ex, ey, ix, iy, 0.82f, 0.12f, ink, 0);
         }
         if (game != null && game.isClosed(p)) {
-            text.setTextSize(th * 0.75f);
-            c.drawText("🚧", sx(gx, gy), sy(gx, gy) + th * 0.1f, text);
+            paintIcon(c, "🚧", gx, gy, ex, ey, ix, iy, 0.5f);
         }
+    }
+
+    /** Pinta um emoji deitado no chão da casa, do tamanho de um quadrado de lado 'size'. */
+    private void paintIcon(Canvas c, String s, float cx, float cy, float ux, float uy, float vx, float vy, float size) {
+        float sdx = dirX(ux, uy), sdy = dirY(ux, uy);
+        if (sdx < 0 || (Math.abs(sdx) < 1e-3f && sdy < 0)) { ux = -ux; uy = -uy; sdx = -sdx; sdy = -sdy; }
+        float upx = sdy, upy = -sdx;
+        if (dirX(vx, vy) * upx + dirY(vx, vy) * upy < 0) { vx = -vx; vy = -vy; }
+        float w = Math.max(1f, paintText.measureText(s));
+        float top = -95f, bottom = 22f, hgt = bottom - top;
+        float k = size / Math.max(w, hgt);
+        float gw = w * k, gh = hgt * k;
+        float pixH = (float) Math.hypot(dirX(vx, vy), dirY(vx, vy)) * gh;
+        if (pixH < 5f) return;
+        // canto inferior esquerdo do glifo
+        float bx = cx - ux * gw / 2f - vx * gh / 2f;
+        float by = cy - uy * gw / 2f - vy * gh / 2f;
+        src[0] = 0; src[1] = bottom;
+        src[2] = w; src[3] = bottom;
+        src[4] = 0; src[5] = top;
+        dst[0] = sx(bx, by); dst[1] = sy(bx, by);
+        dst[2] = sx(bx + ux * gw, by + uy * gw); dst[3] = sy(bx + ux * gw, by + uy * gw);
+        dst[4] = sx(bx + vx * gh, by + vy * gh); dst[5] = sy(bx + vx * gh, by + vy * gh);
+        matrix.setPolyToPoly(src, 0, dst, 0, 3);
+        c.save();
+        c.concat(matrix);
+        paintText.setColor(0xFF000000);
+        c.drawText(s, 0, 0, paintText);
+        c.restore();
     }
 
     /**
