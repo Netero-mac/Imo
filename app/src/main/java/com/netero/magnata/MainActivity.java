@@ -16,6 +16,7 @@ import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -38,6 +39,7 @@ import com.netero.magnata.engine.Player;
 import com.netero.magnata.net.Bt;
 import com.netero.magnata.net.Link;
 import com.netero.magnata.net.Msg;
+import com.netero.magnata.net.Wifi;
 import com.netero.magnata.ui.BoardView;
 
 import java.security.SecureRandom;
@@ -69,6 +71,11 @@ public class MainActivity extends Activity {
 
     // anfitrião
     private Bt.Server server;
+    private Wifi.Server wifiServer;
+    private boolean hostWifi;
+    private Wifi.Finder finder;
+    private WifiManager.MulticastLock multicastLock;
+    private final List<String[]> rooms = new ArrayList<>(); // {nome, ip}
     private final List<Link> clients = new ArrayList<>();
     private boolean gameStarted;
 
@@ -218,11 +225,23 @@ public class MainActivity extends Activity {
         c.addView(name);
         Runnable save = () -> prefs.edit().putString("name", name.getText().toString().trim()).apply();
 
-        c.addView(button("📶  Criar sala (Bluetooth)", GREEN, v -> { save.run(); startHost(); }));
-        c.addView(button("🔗  Entrar numa sala (Bluetooth)", GREEN_LIGHT, v -> { save.run(); startJoin(); }));
+        c.addView(button("📶  Criar sala", GREEN, v -> { save.run(); chooseTransport(true); }));
+        c.addView(button("🔗  Entrar numa sala", GREEN_LIGHT, v -> { save.run(); chooseTransport(false); }));
         c.addView(button("📱  Jogar no mesmo celular", GOLD, v -> { save.run(); showLocalSetup(); }));
         c.addView(button("❓  Como jogar", GREY, v -> showHelp()));
         setContentView(page(c));
+    }
+
+    private void chooseTransport(final boolean host) {
+        String[] opts = {"📡  Wi-Fi (todos na mesma rede)", "🔵  Bluetooth"};
+        new AlertDialog.Builder(this)
+                .setTitle(host ? "Criar sala por..." : "Entrar na sala por...")
+                .setItems(opts, (d, w) -> {
+                    if (w == 0) { if (host) startHostWifi(); else showJoinWifi(); }
+                    else { if (host) startHost(); else startJoin(); }
+                })
+                .setNegativeButton("Cancelar", null)
+                .show();
     }
 
     private void showHelp() {
@@ -235,6 +254,8 @@ public class MainActivity extends Activity {
                 + "• Na prisão: tire dupla, pague R$ 50 ou use a carta. Na 3ª tentativa a fiança é cobrada.\n\n"
                 + "• Ficou devendo? Venda casas ou hipoteque. Se não der, é falência.\n\n"
                 + "• Vence quem sobrar!\n\n"
+                + "Wi-Fi: todos os celulares precisam estar na mesma rede (pode ser o roteador de um dos celulares). "
+                + "Um cria a sala e os outros tocam em \"Entrar numa sala\" > Wi-Fi.\n\n"
                 + "Bluetooth: um celular cria a sala; os amigos tocam em \"Entrar numa sala\" e escolhem o celular do anfitrião. "
                 + "Se o celular não aparecer, pareie os aparelhos antes nas configurações de Bluetooth.";
         new AlertDialog.Builder(this).setTitle("Como jogar").setMessage(s).setPositiveButton("Entendi", null).show();
@@ -326,6 +347,7 @@ public class MainActivity extends Activity {
         ensureBluetooth(() -> {
             shutdownNetwork();
             mode = MODE_HOST;
+            hostWifi = false;
             myIndex = 0;
             gameStarted = false;
             leaving = false;
@@ -335,6 +357,23 @@ public class MainActivity extends Activity {
             requestDiscoverable();
             showHostLobby();
         });
+    }
+
+    private void startHostWifi() {
+        shutdownNetwork();
+        if (Wifi.localIps().isEmpty()) {
+            toast("Conecte este celular a uma rede Wi-Fi (ou ligue o roteador do celular).");
+            return;
+        }
+        mode = MODE_HOST;
+        hostWifi = true;
+        myIndex = 0;
+        gameStarted = false;
+        leaving = false;
+        clients.clear();
+        wifiServer = new Wifi.Server();
+        wifiServer.start(myName(), hostServerCallback);
+        showHostLobby();
     }
 
     private void requestDiscoverable() {
@@ -419,12 +458,23 @@ public class MainActivity extends Activity {
         screen = "hostLobby";
         LinearLayout c = column();
         c.addView(title("Sala aberta"));
-        c.addView(label("Peça para os amigos abrirem o Magnata, tocarem em \"Entrar numa sala\" e escolherem este celular"
-                + (bt != null && bt.getName() != null ? " (\"" + bt.getName() + "\")" : "") + ".", 15));
+        if (hostWifi) {
+            List<String> ips = Wifi.localIps();
+            c.addView(label("Sala por Wi-Fi. Os amigos precisam estar na mesma rede, tocar em \"Entrar numa sala\" > Wi-Fi "
+                    + "e escolher a sala \"" + myName() + "\".", 15));
+            TextView ipT = label("Se a sala não aparecer, digitem o endereço: " + String.join("  ou  ", ips), 15);
+            ipT.setTypeface(Typeface.DEFAULT_BOLD);
+            c.addView(ipT);
+        } else {
+            String btName = null;
+            try { btName = bt != null ? bt.getName() : null; } catch (SecurityException ignored) { }
+            c.addView(label("Sala por Bluetooth. Peça para os amigos tocarem em \"Entrar numa sala\" > Bluetooth e escolherem este celular"
+                    + (btName != null ? " (\"" + btName + "\")" : "") + ".", 15));
+        }
         c.addView(label("Jogadores na sala:", 17));
         listBox = column();
         c.addView(listBox);
-        c.addView(button("👁  Ficar visível de novo", GREEN_LIGHT, v -> requestDiscoverable()));
+        if (!hostWifi) c.addView(button("👁  Ficar visível de novo", GREEN_LIGHT, v -> requestDiscoverable()));
         c.addView(button("▶  Começar partida", GREEN, v -> hostStartGame()));
         c.addView(button("Cancelar", GREY, v -> { shutdownNetwork(); showMenu(); }));
         setContentView(page(c));
@@ -461,6 +511,7 @@ public class MainActivity extends Activity {
         }
         gameStarted = true;
         if (server != null) server.stop();
+        if (wifiServer != null) wifiServer.stop();
         game = new Game(names.toArray(new String[0]), new SecureRandom());
         showGame();
         hostChanged();
@@ -553,25 +604,99 @@ public class MainActivity extends Activity {
         stopDiscovery();
         if (statusText != null) statusText.setText("Conectando a " + deviceName(d) + "...");
         Bt.connect(bt, d, new Bt.ConnectCallback() {
-            @Override public void onConnected(final Link link) {
-                ui.post(() -> {
-                    if (!screen.equals("join")) { link.close(); return; }
-                    mode = MODE_CLIENT;
-                    leaving = false;
-                    hostLink = link;
-                    myIndex = -1;
-                    lobbyNames = new String[0];
-                    link.start(clientListener);
-                    link.send(Link.HELLO, Msg.str(myName()));
-                    showWaiting();
-                });
-            }
+            @Override public void onConnected(final Link link) { ui.post(() -> onJoined(link)); }
             @Override public void onConnectFailed(final String msg) {
                 ui.post(() -> {
                     if (statusText != null) statusText.setText(msg);
                 });
             }
         });
+    }
+
+    private void onJoined(Link link) {
+        if (!screen.equals("join") && !screen.equals("joinWifi")) { link.close(); return; }
+        stopFinder();
+        mode = MODE_CLIENT;
+        leaving = false;
+        hostLink = link;
+        myIndex = -1;
+        lobbyNames = new String[0];
+        link.start(clientListener);
+        link.send(Link.HELLO, Msg.str(myName()));
+        showWaiting();
+    }
+
+    // ---------------------------------------------------------------- cliente Wi-Fi
+
+    private void showJoinWifi() {
+        shutdownNetwork();
+        screen = "joinWifi";
+        rooms.clear();
+        LinearLayout c = column();
+        c.addView(title("Entrar por Wi-Fi"));
+        c.addView(label("Salas encontradas na sua rede:", 15));
+        statusText = label("Procurando salas...", 14);
+        c.addView(statusText);
+        listBox = column();
+        c.addView(listBox);
+        c.addView(label("Ou digite o endereço que aparece no celular do anfitrião:", 15));
+        final EditText ip = input("Ex.: 192.168.0.10", prefs.getString("lastIp", ""));
+        ip.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(40)});
+        c.addView(ip);
+        c.addView(button("Conectar neste endereço", GREEN_LIGHT, v -> {
+            String a = ip.getText().toString().trim();
+            if (a.isEmpty()) { toast("Digite o endereço."); return; }
+            prefs.edit().putString("lastIp", a).apply();
+            connectWifi(a);
+        }));
+        c.addView(button("Voltar", GREY, v -> { stopFinder(); showMenu(); }));
+        setContentView(page(c));
+        refreshRooms();
+
+        try {
+            WifiManager wm = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+            if (wm != null) {
+                multicastLock = wm.createMulticastLock("magnata");
+                multicastLock.setReferenceCounted(false);
+                multicastLock.acquire();
+            }
+        } catch (Exception ignored) { }
+        finder = new Wifi.Finder();
+        finder.start((name, addr) -> ui.post(() -> {
+            if (!screen.equals("joinWifi")) return;
+            for (String[] r : rooms) if (r[1].equals(addr)) { if (!r[0].equals(name)) { r[0] = name; refreshRooms(); } return; }
+            rooms.add(new String[]{name, addr});
+            refreshRooms();
+        }));
+    }
+
+    private void refreshRooms() {
+        if (listBox == null || !screen.equals("joinWifi")) return;
+        listBox.removeAllViews();
+        if (rooms.isEmpty()) {
+            listBox.addView(label("Nenhuma sala ainda. Confira se o anfitrião criou a sala por Wi-Fi e se vocês estão na mesma rede.", 14));
+        }
+        for (final String[] r : rooms) {
+            listBox.addView(button("🎲  Sala de " + r[0] + "  (" + r[1] + ")", GREEN, v -> connectWifi(r[1])));
+        }
+    }
+
+    private void connectWifi(String ip) {
+        if (statusText != null) statusText.setText("Conectando a " + ip + "...");
+        Wifi.connect(ip, new Bt.ConnectCallback() {
+            @Override public void onConnected(final Link link) { ui.post(() -> onJoined(link)); }
+            @Override public void onConnectFailed(final String msg) {
+                ui.post(() -> { if (statusText != null && screen.equals("joinWifi")) statusText.setText(msg); });
+            }
+        });
+    }
+
+    private void stopFinder() {
+        if (finder != null) { finder.stop(); finder = null; }
+        if (multicastLock != null) {
+            try { multicastLock.release(); } catch (Exception ignored) { }
+            multicastLock = null;
+        }
     }
 
     private final Link.Listener clientListener = new Link.Listener() {
@@ -651,6 +776,8 @@ public class MainActivity extends Activity {
         leaving = true;
         stopDiscovery();
         if (server != null) { server.stop(); server = null; }
+        if (wifiServer != null) { wifiServer.stop(); wifiServer = null; }
+        stopFinder();
         for (Link l : new ArrayList<>(clients)) l.close();
         clients.clear();
         if (hostLink != null) { hostLink.close(); hostLink = null; }
