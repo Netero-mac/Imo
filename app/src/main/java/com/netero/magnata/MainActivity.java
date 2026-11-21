@@ -1094,7 +1094,7 @@ public class MainActivity extends Activity {
         board = new BoardView(this);
         board.setOnSquareTap(this::showSquare);
         board.setFx(n -> sound.play(n));
-        board.setInsets(dp(96), dp(250));
+        board.setInsets(dp(100), dp(225));
         root.addView(board, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         // topo: placar + evento
@@ -1125,30 +1125,29 @@ public class MainActivity extends Activity {
         panel.addView(gameStatus);
         actionsBox = column();
         panel.addView(actionsBox);
-        HorizontalScrollView tb = new HorizontalScrollView(this);
-        tb.setHorizontalScrollBarEnabled(false);
         LinearLayout tools = row();
         tools.setPadding(0, dp(6), 0, 0);
         tools.addView(tool("🏠", "Bens", v -> showMyProperties(viewer())));
         powersBtn = tool("🃏", "Poderes", v -> showPowers());
         tools.addView(powersBtn);
-        tools.addView(tool("🤝", "Trocar", v -> startTrade()));
-        tools.addView(tool("🏦", "Banco", v -> showBank()));
+        tools.addView(tool("🤝", "Negociar", v -> showDeals()));
         tools.addView(tool("🎯", "Missão", v -> showMission()));
-        tools.addView(tool("😀", "Emoji", v -> showEmojis()));
-        tools.addView(tool("📜", "Histórico", v -> showLog()));
-        tools.addView(tool("📖", "Guia", v -> dialog("📖 Guia", guideContent())));
-        tools.addView(tool(sound.enabled ? "🔊" : "🔇", "Som", v -> {
-            sound.enabled = !sound.enabled;
-            prefs.edit().putBoolean("sound", sound.enabled).apply();
-            ((Button) v).setText((sound.enabled ? "🔊" : "🔇") + "\nSom");
-        }));
-        tools.addView(tool("🚪", "Sair", v -> confirmExit()));
-        tb.addView(tools);
-        panel.addView(tb);
+        tools.addView(tool("☰", "Menu", v -> showGameMenu()));
+        panel.addView(tools);
         FrameLayout.LayoutParams plp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM);
         plp.setMargins(dp(6), 0, dp(6), dp(6));
         root.addView(panel, plp);
+
+        // controles do tabuleiro (girar, centralizar, emoji)
+        LinearLayout ctrls = column();
+        ctrls.addView(roundBtn("⟲", v -> board.rotateBy(-90)));
+        ctrls.addView(roundBtn("⟳", v -> board.rotateBy(90)));
+        ctrls.addView(roundBtn("⛶", v -> board.recenter()));
+        ctrls.addView(roundBtn("😀", v -> showEmojis()));
+        FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.END | Gravity.CENTER_VERTICAL);
+        clp.setMargins(0, 0, dp(8), dp(60));
+        root.addView(ctrls, clp);
 
         setContentView(root);
         if (mode == MODE_LOCAL || mode == MODE_HOST) authoritativeChanged();
@@ -1162,11 +1161,65 @@ public class MainActivity extends Activity {
         b.setTextColor(INK);
         b.setPadding(dp(4), dp(2), dp(4), dp(2));
         b.setBackground(rounded(0xFFFFF8E1, 12, INK, 1.5f));
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(64), dp(54));
-        lp.rightMargin = dp(5);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(54), 1f);
+        lp.leftMargin = dp(2);
+        lp.rightMargin = dp(2);
         b.setLayoutParams(lp);
         b.setOnClickListener(v -> { sound.play("pop"); l.onClick(v); });
         return b;
+    }
+
+    private TextView roundBtn(String icon, View.OnClickListener l) {
+        TextView t = new TextView(this);
+        t.setText(icon);
+        t.setTextSize(20);
+        t.setTextColor(INK);
+        t.setGravity(Gravity.CENTER);
+        GradientDrawable g = new GradientDrawable();
+        g.setShape(GradientDrawable.OVAL);
+        g.setColor(0xEEFFFFFF);
+        g.setStroke(dp(2), INK);
+        t.setBackground(g);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(46), dp(46));
+        lp.topMargin = dp(8);
+        t.setLayoutParams(lp);
+        t.setOnClickListener(v -> { sound.play("pop"); l.onClick(v); });
+        return t;
+    }
+
+    /** Coisas que não são da partida em si. */
+    private void showGameMenu() {
+        boolean tips = prefs.getBoolean("tips", true);
+        String[] items = {
+                "📜  Histórico da partida",
+                "📖  Guia do jogo",
+                sound.enabled ? "🔇  Desligar som" : "🔊  Ligar som",
+                tips ? "💡  Desligar dicas" : "💡  Ligar dicas",
+                "🚪  Sair da partida"
+        };
+        new AlertDialog.Builder(this).setTitle("☰ Menu")
+                .setItems(items, (d, w) -> {
+                    switch (w) {
+                        case 0: showLog(); break;
+                        case 1: dialog("📖 Guia", guideContent()); break;
+                        case 2:
+                            sound.enabled = !sound.enabled;
+                            prefs.edit().putBoolean("sound", sound.enabled).apply();
+                            break;
+                        case 3:
+                            prefs.edit().putBoolean("tips", !tips).apply();
+                            break;
+                        default: confirmExit(); break;
+                    }
+                })
+                .setNegativeButton("Fechar", null).show();
+    }
+
+    private void showDeals() {
+        String[] items = {"🤝  Trocar com outro jogador", "🏦  Banco (empréstimo)"};
+        new AlertDialog.Builder(this).setTitle("🤝 Negociar")
+                .setItems(items, (d, w) -> { if (w == 0) startTrade(); else showBank(); })
+                .setNegativeButton("Fechar", null).show();
     }
 
     /** Quem está agindo neste celular. */
