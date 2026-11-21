@@ -187,53 +187,84 @@ public final class Wifi {
         }
     }
 
+    /** Mesma sub-rede /24 (ex.: 192.168.0.x). */
+    public static boolean sameSubnet(String a, String b) {
+        int ia = a.lastIndexOf('.'), ib = b.lastIndexOf('.');
+        return ia > 0 && ib > 0 && a.substring(0, ia).equals(b.substring(0, ib));
+    }
+
+    /**
+     * Monta a lista de endereços a tentar: primeiro o endereço de onde veio o anúncio da sala,
+     * depois os outros endereços do anfitrião que estão na mesma rede. Nunca tenta endereços
+     * deste próprio celular (evita "conectar em si mesmo").
+     */
+    public static List<String> candidates(String source, String[] alts) {
+        List<String> mine = localIps();
+        LinkedHashSet<String> out = new LinkedHashSet<>();
+        if (source != null && !mine.contains(source)) out.add(source);
+        if (alts != null) {
+            for (String a : alts) {
+                a = a.trim();
+                if (a.isEmpty() || mine.contains(a)) continue;
+                if (source == null || sameSubnet(a, source)) out.add(a);
+            }
+        }
+        if (out.isEmpty() && source != null) out.add(source);
+        return new ArrayList<>(out);
+    }
+
     /**
      * Tenta conectar em cada endereço (e porta) da lista, duas rodadas.
-     * ports: portas a tentar em cada endereço.
+     * O diagnóstico final se baseia no primeiro endereço (o principal).
      */
     public static void connect(final List<String> ips, final int[] ports, final Bt.ConnectCallback cb) {
         Thread t = new Thread(() -> {
-            LinkedHashSet<String> unique = new LinkedHashSet<>(ips);
-            boolean timeout = false, refused = false, unreachable = false;
-            String lastMsg = "";
+            List<String> unique = new ArrayList<>(new LinkedHashSet<>(ips));
+            String primaryResult = null;
+            StringBuilder detail = new StringBuilder();
             for (int round = 0; round < 2; round++) {
-                for (String ip : unique) {
+                for (int idx = 0; idx < unique.size(); idx++) {
+                    String ip = unique.get(idx).trim();
                     for (int port : ports) {
                         Socket s = new Socket();
+                        String res;
                         try {
-                            s.connect(new InetSocketAddress(ip.trim(), port), round == 0 ? 4000 : 7000);
+                            s.connect(new InetSocketAddress(ip, port), round == 0 ? 4000 : 8000);
                             s.setTcpNoDelay(true);
                             s.setKeepAlive(true);
                             cb.onConnected(new Link(s, s.getInputStream(), s.getOutputStream()));
                             return;
                         } catch (SocketTimeoutException e) {
-                            timeout = true;
-                            lastMsg = e.getMessage();
+                            res = "sem resposta";
                         } catch (ConnectException e) {
-                            refused = true;
-                            lastMsg = e.getMessage();
+                            res = "recusou";
                         } catch (NoRouteToHostException e) {
-                            unreachable = true;
-                            lastMsg = e.getMessage();
+                            res = "sem rota";
                         } catch (Exception e) {
-                            lastMsg = e.getClass().getSimpleName() + ": " + e.getMessage();
+                            res = e.getClass().getSimpleName();
                         }
                         try { s.close(); } catch (IOException ignored) { }
+                        if (round == 1) {
+                            if (idx == 0 && primaryResult == null) primaryResult = res;
+                            detail.append(ip).append(':').append(port).append(" → ").append(res).append('\n');
+                        }
                     }
                 }
                 try { Thread.sleep(600); } catch (InterruptedException ignored) { }
             }
             String why;
-            if (refused) {
-                why = "O celular do anfitrião recusou a conexão. Peça para ele cancelar e criar a sala de novo (e manter o jogo aberto na tela da sala).";
-            } else if (timeout || unreachable) {
-                why = "A rede não deixou os celulares conversarem. Isso acontece quando o roteador bloqueia a conexão entre aparelhos "
-                        + "(comum em Wi-Fi de visitantes, faculdade ou alguns roteadores) ou quando há VPN ligada. "
-                        + "Solução: um celular liga o roteador (hotspot) e o outro se conecta nele, ou usem o Bluetooth.";
+            if ("recusou".equals(primaryResult)) {
+                why = "O celular do anfitrião recebeu o pedido mas recusou. Peça para ele cancelar e criar a sala de novo, "
+                        + "com o jogo aberto na tela da sala. Se continuar, desliguem VPN / \"Wi-Fi Seguro\" nos dois celulares.";
+            } else if ("sem resposta".equals(primaryResult) || "sem rota".equals(primaryResult)) {
+                why = "A rede não deixou os celulares conversarem. O roteador provavelmente bloqueia conexão entre aparelhos "
+                        + "(comum em Wi-Fi de visitantes, faculdade e alguns roteadores), ou há VPN / \"Wi-Fi Seguro\" ligado.\n\n"
+                        + "Solução: um celular liga o roteador do celular (hotspot) e o outro se conecta nele — não gasta internet. "
+                        + "Ou usem o Bluetooth.";
             } else {
-                why = "Não foi possível conectar (" + lastMsg + ").";
+                why = "Não foi possível conectar.";
             }
-            cb.onConnectFailed(why);
+            cb.onConnectFailed(why + "\n\nDetalhes:\n" + detail.toString().trim());
         }, "wifi-connect");
         t.setDaemon(true);
         t.start();

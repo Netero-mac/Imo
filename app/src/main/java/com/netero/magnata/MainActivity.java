@@ -103,6 +103,7 @@ public class MainActivity extends Activity {
     private boolean hostWifi;
     private final List<Link> clients = new ArrayList<>();
     private boolean gameStarted;
+    private int connAttempts;
 
     // cliente
     private Link hostLink;
@@ -682,6 +683,7 @@ public class MainActivity extends Activity {
         gameStarted = false;
         leaving = false;
         clients.clear();
+        connAttempts = 0;
         maxRounds = Rules.ROUND_OPTIONS[prefs.getInt("roundsMode", 0)];
     }
 
@@ -698,12 +700,14 @@ public class MainActivity extends Activity {
     private final Bt.ServerCallback hostServerCallback = new Bt.ServerCallback() {
         @Override public void onClient(final Link link) {
             ui.post(() -> {
+                connAttempts++;
                 if (mode != MODE_HOST || gameStarted || clients.size() >= MAX_PLAYERS - 1) {
                     link.close();
                     return;
                 }
                 clients.add(link);
                 link.start(hostLinkListener);
+                if (screen.equals("hostLobby")) showHostLobby();
             });
         }
         @Override public void onServerError(final String msg) {
@@ -814,6 +818,9 @@ public class MainActivity extends Activity {
         List<Player.Setup> list = lobbyList();
         for (int i = 0; i < list.size(); i++) c.addView(playerRow(list.get(i), null, null));
         if (list.size() < 2) c.addView(label("Aguardando amigos se conectarem...", 14));
+        TextView ca = label("📥 Pedidos de entrada recebidos: " + connAttempts, 13);
+        ca.setTextColor(0xFF757575);
+        c.addView(ca);
         c.addView(modeSelector());
         if (!hostWifi) c.addView(button("👁  Ficar visível de novo", BLUE, v -> requestDiscoverable()));
         c.addView(button("▶  Começar partida", GREEN, v -> hostStartGame()));
@@ -963,6 +970,9 @@ public class MainActivity extends Activity {
         c.addView(statusText);
         listBox = column();
         c.addView(listBox);
+        TextView hint = label("Dica: se não conectar, um celular liga o roteador do celular (hotspot) e o outro se conecta nele.", 13);
+        hint.setTextColor(0xFF757575);
+        c.addView(hint);
         c.addView(label("Ou digite o endereço que aparece no celular do anfitrião:", 15));
         final EditText ip = input("Ex.: 192.168.0.10", prefs.getString("lastIp", ""));
         ip.setFilters(new InputFilter[]{new InputFilter.LengthFilter(40)});
@@ -1014,9 +1024,7 @@ public class MainActivity extends Activity {
         if (rooms.isEmpty()) listBox.addView(label("Nenhuma sala ainda. Confira se o anfitrião criou a sala por Wi-Fi e se vocês estão na mesma rede.", 14));
         for (final String[] r : rooms) {
             listBox.addView(button("🎲  Entrar na sala de " + r[0], GREEN, v -> {
-                List<String> ips = new ArrayList<>();
-                ips.add(r[1]);
-                for (String x : r[3].split(",")) if (!x.trim().isEmpty()) ips.add(x.trim());
+                List<String> ips = Wifi.candidates(r[1], r[3].split(","));
                 int port = Wifi.PORT;
                 try { port = Integer.parseInt(r[2]); } catch (NumberFormatException ignored) { }
                 connectWifi(ips, new int[]{port});
@@ -1029,7 +1037,12 @@ public class MainActivity extends Activity {
         Wifi.connect(ips, ports, new Bt.ConnectCallback() {
             @Override public void onConnected(final Link link) { ui.post(() -> onJoined(link)); }
             @Override public void onConnectFailed(final String msg) {
-                ui.post(() -> { if (statusText != null && screen.equals("joinWifi")) statusText.setText(msg); });
+                ui.post(() -> {
+                    if (!screen.equals("joinWifi")) return;
+                    if (statusText != null) statusText.setText("Não conectou. Toque na sala para tentar de novo.");
+                    new AlertDialog.Builder(MainActivity.this).setTitle("Não foi possível entrar").setMessage(msg)
+                            .setPositiveButton("OK", null).show();
+                });
             }
         });
     }
