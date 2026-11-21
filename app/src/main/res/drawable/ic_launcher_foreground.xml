@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- casinha dourada -->
+    <path android:fillColor="#C9A227" android:pathData="M54,28 L80,50 L74,50 L74,78 L34,78 L34,50 L28,50 Z" />
+    <path android:fillColor="#F6F1E3" android:pathData="M48,60 L60,60 L60,78 L48,78 Z" />
+    <!-- dado -->
+    <path android:fillColor="#FFFFFF" android:pathData="M62,56 L80,56 L80,74 L62,74 Z" />
+    <path android:fillColor="#1B5E20" android:pathData="M66,60 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0" />
+    <path android:fillColor="#1B5E20" android:pathData="M71,65 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0" />
+    <path android:fillColor="#1B5E20" android:pathData="M76,70 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0" />
+</vector>
