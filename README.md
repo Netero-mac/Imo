@@ -61,3 +61,7 @@ O próprio jogo tem um **Guia** completo e mostra uma dica na primeira vez que c
 - `ui/Pawns.java` — desenho dos peões
 - `ui/Sound.java` — efeitos sonoros (`res/raw`)
 - `MainActivity.java` — telas
+
+## Licença
+
+Distribuído sob a licença MIT. Veja [LICENSE](LICENSE).
